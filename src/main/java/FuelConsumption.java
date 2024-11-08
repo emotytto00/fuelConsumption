@@ -15,7 +15,7 @@ public class FuelConsumption extends Application {
     @Override
     public void start(Stage stage) {
         bundle = ResourceBundle.getBundle("messages", Locale.ENGLISH);
-        stage.setTitle("Johannes Liikanen!");
+        stage.setTitle("Johannes Liikanen :)");
 
         Label distanceLabel = new Label(bundle.getString("distance.label"));
         Label fuelLabel = new Label(bundle.getString("fuel.label"));
