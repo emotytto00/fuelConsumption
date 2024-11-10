@@ -1,84 +1,176 @@
 import javafx.application.Application;
+import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.ResourceBundle;
 
 public class FuelConsumption extends Application {
 
     private ResourceBundle bundle;
+    private TextField distanceField;
+    private TextField fuelField;
+    private Label resultLabel;
+    private ComboBox<String> languageComboBox;
+    private TableView<ConsumptionRecord> tableView;
+    private ObservableList<ConsumptionRecord> recordData;
+    private GridPane grid;
+
+    private Label distanceLabel;
+    private Label fuelLabel;
+    private Button calculateButton;
 
     @Override
-    public void start(Stage stage) {
-        bundle = ResourceBundle.getBundle("messages", Locale.ENGLISH);
-        stage.setTitle("Johannes Liikanen :)");
+    public void start(Stage primaryStage) {
+        loadResourceBundle("en");
 
-        Label distanceLabel = new Label(bundle.getString("distance.label"));
-        Label fuelLabel = new Label(bundle.getString("fuel.label"));
-        TextField distanceInput = new TextField();
-        TextField fuelInput = new TextField();
-        Button calculateButton = new Button(bundle.getString("calculate.button"));
-        Label resultLabel = new Label();
-        ComboBox<String> languageBox = new ComboBox<>();
+        primaryStage.setTitle("Johannes Liikanen :)");
 
-        languageBox.getItems().addAll("English", "French", "Japanese", "Persian");
-        languageBox.setValue("English");
-
-        languageBox.setOnAction(e -> {
-            String selectedLanguage = languageBox.getValue();
-            switch (selectedLanguage) {
-                case "French":
-                    bundle = ResourceBundle.getBundle("messages", Locale.FRENCH);
-                    break;
-                case "Japanese":
-                    bundle = ResourceBundle.getBundle("messages", Locale.JAPANESE);
-                    break;
-                case "Persian":
-                    bundle = ResourceBundle.getBundle("messages", new Locale("fa"));
-                    break;
-                default:
-                    bundle = ResourceBundle.getBundle("messages", Locale.ENGLISH);
-            }
-            updateLabels(distanceLabel, fuelLabel, calculateButton, resultLabel);
-        });
-
-        calculateButton.setOnAction(e -> {
-            try {
-                double distance = Double.parseDouble(distanceInput.getText());
-                double fuel = Double.parseDouble(fuelInput.getText());
-                double consumption = (fuel / distance) * 100;
-                resultLabel.setText(String.format(bundle.getString("result.label"), String.format("%.2f", consumption)));
-            } catch (NumberFormatException ex) {
-                resultLabel.setText(bundle.getString("invalid.input"));
-            }
-        });
-
-        GridPane grid = new GridPane();
-        grid.setPadding(new Insets(10));
+        grid = new GridPane();
+        grid.setPadding(new Insets(10, 10, 10, 10));
         grid.setVgap(10);
         grid.setHgap(10);
 
-        grid.add(languageBox, 0, 0);
-        grid.add(distanceLabel, 0, 1);
-        grid.add(distanceInput, 1, 1);
-        grid.add(fuelLabel, 0, 2);
-        grid.add(fuelInput, 1, 2);
+        distanceField = new TextField();
+        fuelField = new TextField();
+        resultLabel = new Label();
+        languageComboBox = new ComboBox<>();
+        languageComboBox.getItems().addAll("English", "French", "Japanese", "Persian");
+        languageComboBox.setValue("English");
+
+        distanceLabel = new Label(bundle.getString("distanceLabel"));
+        fuelLabel = new Label(bundle.getString("fuelLabel"));
+        calculateButton = new Button(bundle.getString("calculateButton"));
+
+        tableView = new TableView<>();
+        setupTableView();
+
+        recordData = FXCollections.observableArrayList();
+
+        grid.add(distanceLabel, 0, 0);
+        grid.add(distanceField, 1, 0);
+        grid.add(fuelLabel, 0, 1);
+        grid.add(fuelField, 1, 1);
+        grid.add(languageComboBox, 1, 2);
         grid.add(calculateButton, 0, 3);
         grid.add(resultLabel, 1, 3);
 
-        Scene scene = new Scene(grid, 400, 250);
-        stage.setScene(scene);
-        stage.show();
+        loadRecordsFromDatabase();
+
+        VBox vbox = new VBox(10);
+        vbox.setPadding(new Insets(10));
+        vbox.getChildren().addAll(grid, tableView);
+
+        Scene scene = new Scene(vbox, 600, 400);
+        primaryStage.setScene(scene);
+        primaryStage.show();
+
+        languageComboBox.setOnAction(e -> changeLanguage());
+
+        calculateButton.setOnAction(e -> calculateAndSaveConsumption());
+
+        updateUI();
     }
 
-    private void updateLabels(Label distanceLabel, Label fuelLabel, Button calculateButton, Label resultLabel) {
-        distanceLabel.setText(bundle.getString("distance.label"));
-        fuelLabel.setText(bundle.getString("fuel.label"));
-        calculateButton.setText(bundle.getString("calculate.button"));
+    private void loadResourceBundle(String languageCode) {
+        Locale locale;
+        switch (languageCode) {
+            case "fr":
+                locale = new Locale("fr", "FR");
+                break;
+            case "ja":
+                locale = new Locale("ja", "JP");
+                break;
+            case "fa":
+                locale = new Locale("fa", "IR");
+                break;
+            default:
+                locale = new Locale("en", "US");
+                break;
+        }
+        bundle = ResourceBundle.getBundle("messages", locale);
+    }
+
+    private void changeLanguage() {
+        String selectedLanguage = languageComboBox.getValue();
+        switch (selectedLanguage) {
+            case "French":
+                loadResourceBundle("fr");
+                break;
+            case "Japanese":
+                loadResourceBundle("ja");
+                break;
+            case "Persian":
+                loadResourceBundle("fa");
+                break;
+            default:
+                loadResourceBundle("en");
+                break;
+        }
+        updateUI();
+    }
+
+    private void updateUI() {
+        distanceLabel.setText(bundle.getString("distanceLabel"));
+        fuelLabel.setText(bundle.getString("fuelLabel"));
+        calculateButton.setText(bundle.getString("calculateButton"));
+
         resultLabel.setText("");
+
+        setupTableView();
+    }
+
+    private void calculateAndSaveConsumption() {
+        try {
+            double distance = Double.parseDouble(distanceField.getText());
+            double fuel = Double.parseDouble(fuelField.getText());
+            double consumption = (fuel / distance) * 100;
+
+            resultLabel.setText(String.format(bundle.getString("fuelConsumption"), consumption));
+
+            ConsumptionRecord record = new ConsumptionRecord(distance, fuel, consumption, languageComboBox.getValue());
+            ConsumptionDAO dao = new ConsumptionDAO();
+            dao.insert(record);
+
+            recordData.add(record);
+            tableView.setItems(recordData);
+            tableView.refresh();
+
+        } catch (NumberFormatException ex) {
+            resultLabel.setText(bundle.getString("invalidInput"));
+        }
+    }
+
+
+    private void loadRecordsFromDatabase() {
+        ConsumptionDAO dao = new ConsumptionDAO();
+        List<ConsumptionRecord> records = dao.getAllRecords();
+        recordData.addAll(records);
+    }
+
+    private void setupTableView() {
+        tableView.getColumns().clear();
+
+        TableColumn<ConsumptionRecord, Double> distanceColumn = new TableColumn<>(bundle.getString("distanceLabel"));
+        distanceColumn.setCellValueFactory(new javafx.scene.control.cell.PropertyValueFactory<>("distance"));
+
+        TableColumn<ConsumptionRecord, Double> fuelColumn = new TableColumn<>(bundle.getString("fuelLabel"));
+        fuelColumn.setCellValueFactory(new javafx.scene.control.cell.PropertyValueFactory<>("fuel"));
+
+        TableColumn<ConsumptionRecord, Double> consumptionColumn = new TableColumn<>(bundle.getString("resultLabel"));
+        consumptionColumn.setCellValueFactory(new javafx.scene.control.cell.PropertyValueFactory<>("consumption"));
+
+        TableColumn<ConsumptionRecord, String> languageColumn = new TableColumn<>(bundle.getString("languageLabel"));
+        languageColumn.setCellValueFactory(new javafx.scene.control.cell.PropertyValueFactory<>("language"));
+
+        tableView.getColumns().addAll(distanceColumn, fuelColumn, consumptionColumn, languageColumn);
+        tableView.setItems(recordData);
     }
 }
